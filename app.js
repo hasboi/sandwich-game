@@ -21,7 +21,7 @@ function makeSandwich() {
       resolve("Enjoy your sandwich! 🥪🥪");
       toaster -= 2;
     } else {
-      reject("I'm sorry sir we don't have enough toaster 😭😭");
+      reject("I'm sorry sir we don't have enough toast 😭😭");
     }
   });
 }
