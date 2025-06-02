@@ -1,76 +1,77 @@
+// ============ !imports ============
 import { shopItems, purchases } from "./shopItems.js";
+import { getUpgradeCost, createFeedback } from "./utils.js";
 
-// todo:
+// ============ !state ============
+export const state = {
+  toast: 0,
+  carbs: 0,
+  lastMouseX: 0,
+  lastMouseY: 0,
+  maxToast: 20,
+};
 
-let toaster = 20;
-let carbs = 0;
-const screenWidth = window.innerWidth;
-const screenHeight = window.innerHeight;
-const toasterHud = document.querySelector("#toaster-hud");
-const carbsHud = document.querySelector("#carbs-hud");
-let lastMouseX = 0;
-let lastMouseY = 0;
-
-const refillBtn = document.querySelector("#refill");
+// ============ !DOM refs ============
+const $ = (sel) => document.querySelector(sel);
+const toasterHud = $("#toaster-hud");
+const carbsHud = $("#carbs-hud");
+const sandwichBtn = $("#sandwich");
+const refillBtn = $("#refill");
 const btnText = refillBtn.querySelector(".button-text");
 const loader = refillBtn.querySelector(".loader-bar");
+const shop = $("#shop-wrapper");
+const toggleShop = $("#toggle-shop");
+const carbShop = $("#carb-shop");
 
-let isTodd = false;
+// ============ !HUD updates ============
+const updateHUD = () => {
+  toasterHud.textContent = `🍞 Toast slices: ${state.toast}`;
+  carbsHud.textContent = `💪 Carbs gained: ${state.carbs}`;
+};
 
+// ============ !event listeners ============
 window.addEventListener("mousemove", (e) => {
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
+  [state.lastMouseX, state.lastMouseY] = [e.clientX, e.clientY];
 });
-
-function updatetoasterHud() {
-  toasterHud.textContent = `🍞 toaster: ${toaster}`;
-}
-
-function updateCarbsHud() {
-  carbsHud.textContent = `💪 Carbs gained: ${carbs}`;
-}
-
-function makeSandwich() {
-  return new Promise((resolve, reject) => {
-    if (toaster >= 2) {
-      resolve("Enjoy your sandwich! 🥪🥪");
-      toaster -= 2;
-      todd();
-    } else {
-      reject("I'm sorry sir we don't have enough toast 😭😭");
-    }
-  });
-}
-
-const shop = document.querySelector("#shop-wrapper");
-const toggleShop = document.querySelector("#toggle-shop");
 
 toggleShop.addEventListener("click", () => {
   shop.classList.toggle("open");
 });
 
-export function createFeedback(msg, elementTarget, isSandwich = false) {
-  const feedback = document.createElement("p");
-  feedback.classList.add("feedback");
-  feedback.textContent = msg;
+sandwichBtn.addEventListener("click", () => {
+  makeSandwich()
+    .then((msg) => {
+      createFeedback(msg, sandwichBtn);
+      spawnSandwich();
+    })
+    .catch((msg) => createFeedback(msg, sandwichBtn))
+    .finally(updateHUD);
+});
 
-  let x, y;
-
-  if (isSandwich) {
-    // Place near cursor
-    x = lastMouseX;
-    y = lastMouseY - 100;
-  } else {
-    const rect = elementTarget.getBoundingClientRect();
-    x = rect.left + rect.width / 2;
-    y = rect.top - 65;
+refillBtn.addEventListener("click", () => {
+  if (state.toast >= state.maxToast) {
+    createFeedback("Your toaster is already full sir! 😭", refillBtn);
+    return;
   }
+  makingToaster();
+  setTimeout(() => {
+    state.toast = state.maxToast;
+    updateHUD();
+    createFeedback("Toaster refilled! 😋", refillBtn);
+  }, 3000);
+});
 
-  feedback.style.left = `${x}px`;
-  feedback.style.top = `${y}px`;
-
-  feedback.addEventListener("animationend", () => feedback.remove());
-  document.body.appendChild(feedback);
+// ============ !sandwich logic ============
+function makeSandwich() {
+  return new Promise((resolve, reject) => {
+    if (state.toast >= 2) {
+      state.toast -= 2;
+      todd();
+      resolve("Enjoy your sandwich! 🥪🥪");
+    } else {
+      reject("I'm sorry sir we don't have enough toast 😭😭");
+    }
+  });
 }
 
 function spawnSandwich() {
@@ -82,114 +83,102 @@ function spawnSandwich() {
   sandwich.classList.add("sandwich");
 
   const width = Math.floor(Math.random() * 101) + 200;
+  const sandwichCarbs = Math.round(width / 10);
   sandwich.style.width = `${width}px`;
   sandwich.style.position = "absolute";
 
-  const sandwichCarbs = Math.round(width / 10);
-
-  sandwich.addEventListener("load", () => {
+  sandwich.onload = () => {
     const height = sandwich.naturalHeight * (width / sandwich.naturalWidth);
+    const x = Math.random() * (window.innerWidth - width);
+    const y = Math.random() * (window.innerHeight - height);
 
-    const screenWidth = window.innerWidth;
-    const screenHeight = window.innerHeight;
+    Object.assign(sandwich.style, {
+      left: `${x}px`,
+      top: `${y}px`,
+    });
+  };
 
-    const x = Math.random() * (screenWidth - width);
-    const y = Math.random() * (screenHeight - height);
-
-    sandwich.style.left = `${x}px`;
-    sandwich.style.top = `${y}px`;
-  });
-
-  sandwich.addEventListener("click", () => {
+  sandwich.onclick = () => {
     const munch = new Audio("munch.mp3");
     munch.currentTime = 0.28;
     munch.play();
     sandwich.remove();
 
-    carbs += sandwichCarbs;
-    updateCarbsHud();
+    state.carbs += sandwichCarbs;
+    updateHUD();
     createFeedback(`+${sandwichCarbs} carbs`, sandwich, true);
-  });
+  };
 
   document.body.appendChild(sandwich);
 }
 
+// ============ !toaster logic ============
 function makingToaster() {
-  createFeedback("making toaster! 😋", refill);
+  createFeedback("making toaster! 😋", refillBtn);
   refillBtn.disabled = true;
   btnText.textContent = "Heating up! 🍞";
-  loader.style.width = "0%";
-  loader.style.transition = "width 3s linear";
-  loader.style.display = "block";
 
-  requestAnimationFrame(() => {
-    loader.style.width = "100%";
+  Object.assign(loader.style, {
+    width: "0%",
+    display: "block",
+    transition: "width 3s linear",
   });
+
+  requestAnimationFrame(() => (loader.style.width = "100%"));
 
   setTimeout(() => {
     const ding = new Audio("ding.mp3");
     ding.currentTime = 0.53;
     ding.play();
 
+    state.toast = state.maxToast;
+    updateHUD();
     btnText.textContent = "Restock toast!";
     loader.style.display = "none";
     refillBtn.disabled = false;
-
-    toaster = 20;
-    updatetoasterHud();
   }, 3000);
 }
 
-const sandwichBtn = document.querySelector("#sandwich");
-sandwichBtn.addEventListener("click", (e) => {
-  makeSandwich()
-    .then((msg) => {
-      createFeedback(msg, sandwichBtn);
-      spawnSandwich();
-      updatetoasterHud();
-    })
-    .catch((msg) => {
-      createFeedback(msg, sandwichBtn);
-      updatetoasterHud();
-    });
-});
-
-const refill = document.querySelector("#refill");
-refill.addEventListener("click", (e) => {
-  if (toaster >= 20) {
-    createFeedback("Your toaster is already full sir! 😭", refill);
-    return;
+export function todd() {
+  if (state.toast < 2 && purchases.isTodd) {
+    makingToaster();
   }
-  makingToaster();
-  setTimeout(() => {
-    toaster = 20;
-    updatetoasterHud();
-    createFeedback("Toaster refilled! 😋", refill);
-  }, 3000);
-});
-
-const carbShop = document.querySelector("#carb-shop");
-
-function dramaticPoof(element) {
-  element.classList.add("poof");
-
-  element.addEventListener("animationend", () => element.remove());
 }
 
+// ============ !shop logic ============
 shopItems.forEach((item) => {
   const btn = document.createElement("button");
   btn.classList.add("shop-item");
-  btn.textContent = `${item.name} (${item.cost} carbs)`;
 
+  const getLevel = () =>
+    item.upgradable ? purchases[`${item.id}Level`] || 0 : 0;
+  const getCost = () =>
+    getUpgradeCost(item.baseCost, getLevel(), item.multiplier);
+
+  const updateBtnText = () => {
+    const level = getLevel();
+    const cost = getCost();
+    const lvText = item.upgradable ? ` Lv.${level + 1}` : "";
+    btn.textContent = `${item.name}${lvText} (${cost} carbs)`;
+  };
+
+  updateBtnText();
   attachTooltip(btn, item.description);
 
   btn.addEventListener("click", () => {
-    if (carbs >= item.cost) {
-      carbs -= item.cost;
-      updateCarbsHud();
-      item.effect();
+    const cost = getCost();
 
-      dramaticPoof(btn);
+    if (state.carbs >= cost) {
+      state.carbs -= cost;
+      updateHUD();
+      item.effect();
+      createFeedback(item.feedback, btn);
+
+      if (!item.upgradable) {
+        dramaticPoof(btn);
+      } else {
+        updateBtnText();
+      }
     } else {
       createFeedback("Not enough carbs 🥲", btn);
     }
@@ -198,39 +187,38 @@ shopItems.forEach((item) => {
   carbShop.appendChild(btn);
 });
 
+// ============ !tooltips ============
 const sharedTooltip = document.createElement("div");
 sharedTooltip.classList.add("tooltip");
 document.body.appendChild(sharedTooltip);
 
-function attachTooltip(element, text) {
+function attachTooltip(el, text) {
   const moveTooltip = (e) => {
     sharedTooltip.style.left = `${e.pageX + 10}px`;
     sharedTooltip.style.top = `${e.pageY + 10}px`;
   };
 
-  element.addEventListener("mouseenter", (e) => {
+  el.addEventListener("mouseenter", (e) => {
     sharedTooltip.textContent = text;
     sharedTooltip.style.display = "block";
     moveTooltip(e);
   });
 
-  element.addEventListener("mousemove", moveTooltip);
-
-  element.addEventListener("mouseleave", () => {
+  el.addEventListener("mousemove", moveTooltip);
+  el.addEventListener("mouseleave", () => {
     sharedTooltip.style.display = "none";
   });
 }
 
-function todd() {
-  if (toaster <= 0 && purchases.isTodd) {
-    makingToaster();
-  } else {
-    return;
-  }
+// ============ !utils ============
+function dramaticPoof(element) {
+  element.classList.add("poof");
+  element.addEventListener("animationend", () => element.remove());
 }
 
+// ============ !debugs ============
 window.give = function (amount) {
-  carbs += amount;
-  updateCarbsHud();
-  console.log(`Gave ${amount} carbs! Total: ${carbs}`);
+  state.carbs += amount;
+  updateHUD();
+  console.log(`Gave ${amount} carbs! Total: ${state.carbs}`);
 };
